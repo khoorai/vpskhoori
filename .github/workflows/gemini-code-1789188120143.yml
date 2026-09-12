@@ -9,15 +9,18 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: 1. Setup User & Enable Screen Sharing (VNC)
+      - name: 1. Setup User and VNC for TightVNC Support
         run: |
-          # تغییر رمز عبور کاربر runner بدون نیاز به رمز قدیمی
+          # ۱. تنظیم رمز عبور سیستم برای کاربر runner
           sudo sysadminctl -adminUser runner -adminPassword "" -resetPasswordFor runner -newPassword "P@ssw0rd1qazXSW@#"
 
-          # فعال‌سازی سرویس Screen Sharing / VNC مک
-          sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist
-          
-          echo "✅ Password changed and Screen Sharing (VNC) is enabled."
+          # ۲. فعال‌سازی رمزنگاری قدیمی (Legacy VNC) و تنظیم رمز اختصاصی برای TightVNC
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -activate -configure -access -on \
+            -clientopts -setvnclegacy yes -setvncpw -vncpw "P@ssw0rd1qazXSW@#" \
+            -restart -agent -privs -all
+
+          echo "✅ VNC configured with Legacy Security support."
 
       - name: 2. Install & Connect Tailscale VPN
         env:
