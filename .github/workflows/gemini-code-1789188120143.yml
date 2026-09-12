@@ -11,13 +11,13 @@ jobs:
     steps:
       - name: 1. Setup User & Enable Screen Sharing (VNC)
         run: |
-          # تنظیم رمز عبور برای کاربر پیش‌فرض runner در مک
-          echo "P@ssw0rd1qazXSW@#" | sudo dscl . -passwd /Users/runner
+          # تغییر رمز عبور کاربر runner بدون نیاز به رمز قدیمی
+          sudo sysadminctl -adminUser runner -adminPassword "" -resetPasswordFor runner -newPassword "P@ssw0rd1qazXSW@#"
 
           # فعال‌سازی سرویس Screen Sharing / VNC مک
           sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist
           
-          echo "✅ Screen Sharing (VNC) is enabled."
+          echo "✅ Password changed and Screen Sharing (VNC) is enabled."
 
       - name: 2. Install & Connect Tailscale VPN
         env:
