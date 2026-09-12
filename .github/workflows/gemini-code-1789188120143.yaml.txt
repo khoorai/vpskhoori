@@ -1,0 +1,55 @@
+name: macOS Cloud Desktop (VNC + Tailscale)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: 1. Setup User & Enable Screen Sharing (VNC)
+        run: |
+          # تنظیم رمز عبور برای کاربر پیش‌فرض runner در مک
+          echo "P@ssw0rd1qazXSW@#" | sudo dscl . -passwd /Users/runner
+
+          # فعال‌سازی سرویس Screen Sharing / VNC مک
+          sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist
+          
+          echo "✅ Screen Sharing (VNC) is enabled."
+
+      - name: 2. Install & Connect Tailscale VPN
+        env:
+          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+        run: |
+          # نصب Tailscale با Homebrew
+          brew install tailscale
+          
+          # اجرای دمون Tailscale در پس‌زمینه
+          sudo tailscaled > /dev/null 2>&1 &
+          sleep 5
+          
+          # اتصال به شبکه Tailscale
+          sudo tailscale up --authkey="$TAILSCALE_AUTHKEY" --hostname="github-mac-$RANDOM" --accept-routes
+          
+          # دریافت آدرس IP اختصاصی
+          TS_IP=$(tailscale ip -4)
+          
+          echo ""
+          echo "==========================================================" 
+          echo "  >>> 🍎 macOS CLOUD DESKTOP IS READY! <<<" 
+          echo "  🌐 Tailscale IP : $TS_IP" 
+          echo "  👤 Username     : runner" 
+          echo "  🔑 Password     : P@ssw0rd1qazXSW@#" 
+          echo "----------------------------------------------------------"
+          echo "  🖥️ VNC / Screen Sharing Address : $TS_IP:5900"
+          echo "==========================================================" 
+
+      - name: 3. Keep Server Alive (Max 350 mins)
+        run: |
+          # حلقه زنده نگه داشتن سیستم
+          for ((i=1; i<=350; i++)); do
+            sleep 60
+            echo "⏳ [$i/350] macOS runner active..."
+          done
