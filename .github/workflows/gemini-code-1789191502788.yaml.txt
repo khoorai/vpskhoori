@@ -1,0 +1,71 @@
+name: Windows Server 2022 (RDP + Tailscale)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 360
+
+    steps:
+      - name: 1. Enable RDP & Set User Password
+        shell: powershell
+        run: |
+          # ۱. فعال‌سازی سرویس RDP در ریجستری
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          
+          # ۲. باز کردن پورت 3389 در فایروال ویندوز
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          
+          # ۳. تنظیم رمز عبور برای کاربر مدیر (runneradmin)
+          $Password = ConvertTo-SecureString "P@ssw0rd1qazXSW@#" -AsPlainText -Force
+          Set-LocalUser -Name "runneradmin" -Password $Password
+          
+          Write-Host "✅ RDP and user password configured successfully."
+
+      - name: 2. Install & Start Tailscale VPN
+        shell: powershell
+        env:
+          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+        run: |
+          # ۱. دانلود و نصب پیش‌فرض Tailscale
+          curl.exe -L -o tailscale-setup.exe "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe"
+          Start-Process -FilePath "tailscale-setup.exe" -ArgumentList "/quiet /norestart" -Wait
+          
+          # ۲. دانلود ابزار NSSM جهت مدیریت سرویس پس‌زمینه
+          curl.exe -L -o nssm.zip "https://nssm.cc/release/nssm-2.24.zip"
+          Expand-Archive -Path "nssm.zip" -DestinationPath "."
+          
+          # ۳. نصب و اجرای سرویس Tailscale
+          $NssmPath = (Get-ChildItem -Path "." -Filter "nssm.exe" -Recurse).FullName | Select-Object -First 1
+          & $NssmPath install TailscaleService "C:\Program Files\Tailscale\tailscaled.exe"
+          Start-Service TailscaleService
+          Start-Sleep -Seconds 5
+          
+          # ۴. احراز هویت و اتصال به شبکه
+          $Hostname = "github-windows-" + (Get-Random)
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey="$env:TAILSCALE_AUTHKEY" --hostname="$Hostname" --accept-routes
+          
+          # ۵. دریافت آی‌پی اختصاصی Tailscale
+          $TS_IP = (& "C:\Program Files\Tailscale\tailscale.exe" ip -4).Trim()
+          
+          # نمایش مشخصات اتصال در لوگ‌های اکشن
+          Write-Host ""
+          Write-Host "==========================================================" -ForegroundColor Green
+          Write-Host "  >>> 🖥️ WINDOWS SERVER 2022 IS READY FOR RDP <<<" -ForegroundColor Green
+          Write-Host "  🌐 Tailscale IP : $TS_IP" -ForegroundColor Yellow
+          Write-Host "  👤 Username     : runneradmin" -ForegroundColor Yellow
+          Write-Host "  🔑 Password     : P@ssw0rd1qazXSW@#" -ForegroundColor Yellow
+          Write-Host "----------------------------------------------------------"
+          Write-Host "  💻 RDP Address  : $TS_IP:3389" -ForegroundColor Cyan
+          Write-Host "==========================================================" -ForegroundColor Green
+
+      - name: 3. Keep Server Alive (Max 350 mins)
+        shell: powershell
+        run: |
+          # نگه‌داشتن سرور روشن تا حداکثر ۵.۵ ساعت
+          for ($i = 1; $i -le 350; $i++) {
+            Start-Sleep -Seconds 60
+            Write-Host "⏳ [$i/350] Windows Server active..."
+          }
